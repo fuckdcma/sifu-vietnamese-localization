@@ -188,6 +188,64 @@ class ArtifactPackagerTests(unittest.TestCase):
         self.assertIn("not portable", result.stderr)
         self.assertFalse(output_path.exists())
 
+    def test_windows_reserved_names_and_invalid_characters_are_rejected_everywhere(self):
+        unsafe_paths = (
+            "NUL.txt",
+            "CON",
+            "COM1.log",
+            "folder/LPT9.data",
+            "folder/name?.txt",
+            "trailing.",
+        )
+        for index, unsafe_path in enumerate(unsafe_paths):
+            with self.subTest(path=unsafe_path):
+                result, output_path = self.run_packager(
+                    [unsafe_path], output_name="unsafe-{}.json".format(index)
+                )
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("not portable", result.stderr)
+                self.assertFalse(output_path.exists())
+
+    def test_case_insensitive_destination_collision_is_rejected(self):
+        if sys.platform == "win32":
+            self.skipTest("case-distinct source files are unavailable on Windows")
+        self.write_source("Folder/File.bin", b"first")
+        self.write_source("folder/file.bin", b"second")
+
+        result, output_path = self.run_packager(["Folder/File.bin", "folder/file.bin"])
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("duplicate destination", result.stderr)
+        self.assertFalse(output_path.exists())
+
+    def test_casefolded_file_directory_collision_is_rejected(self):
+        if sys.platform == "win32":
+            self.skipTest("case-distinct source paths are unavailable on Windows")
+        self.write_source("Item", b"file")
+        self.write_source("item/child.bin", b"child")
+
+        result, output_path = self.run_packager(["Item", "item/child.bin"])
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("destination conflicts with artifact file", result.stderr)
+        self.assertFalse(output_path.exists())
+
+    def test_resolved_symlink_target_must_have_portable_name(self):
+        if sys.platform == "win32":
+            self.skipTest("Windows does not permit creating the reserved source name")
+        reserved_target = self.write_source("NUL.txt", b"synthetic payload")
+        link_path = self.source_root / "portable-link.txt"
+        try:
+            link_path.symlink_to(reserved_target.name)
+        except (NotImplementedError, OSError) as exc:
+            self.skipTest("symlinks are unavailable: {}".format(exc))
+
+        result, output_path = self.run_packager(["portable-link.txt"])
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("resolved input path is not portable", result.stderr)
+        self.assertFalse(output_path.exists())
+
     def test_internal_dotdot_is_rejected(self):
         self.write_source("safe.txt", b"safe")
         (self.source_root / "sub").mkdir()
