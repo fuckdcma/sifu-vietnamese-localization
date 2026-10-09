@@ -1,0 +1,8 @@
+key,source,Translation
+unicode_01,"Tiếng Việt: ă, â, đ, ê, ô, ơ, ư; dấu thanh: á, à, ả, ã, ạ.",Dữ liệu thử nghiệm Unicode.
+quotes_02,"Người dùng nói: ""Xin chào, thế giới!""",Ô kiểm tra dấu ngoặc kép.
+newline_03,"Dòng thứ nhất
+Dòng thứ hai",Ô này chứa một newline thực tế.
+placeholder_04,Tên={PlayerName}; điểm={0}.,Giữ nguyên {PlayerName} và {0}.
+escape_05,Chuỗi escape dạng văn bản: \n.,Backslash và chữ n vẫn nguyên dạng.
+markup_06,Thẻ định dạng kiểm thử.,Đây là <b>đậm</b> và chỉ là dữ liệu giả lập.
