@@ -9,11 +9,15 @@ import hashlib
 import json
 import mimetypes
 import os
-import re
 import stat
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Union
+
+from artifact_paths import (
+    find_artifact_path_conflicts,
+    validate_artifact_relative_path,
+)
 
 DEFAULT_MAX_FILE_BYTES = 64 * 1024 * 1024
 DEFAULT_MAX_PACKAGE_BYTES = 128 * 1024 * 1024
@@ -46,16 +50,15 @@ def non_negative_integer(value: str) -> int:
 
 def validate_input_path(requested_file: str) -> Path:
     """Require portable, traversal-free relative paths in package metadata."""
-    if not requested_file or "\x00" in requested_file or ":" in requested_file:
-        raise ValueError("input path is not portable: " + requested_file)
-    if os.name != "nt" and "\\" in requested_file:
-        raise ValueError("input path is not portable: " + requested_file)
-    if any(part in ("", ".", "..") for part in re.split(r"[/\\]", requested_file)):
-        raise ValueError("input path is not normalized: " + requested_file)
-    input_path = Path(requested_file)
-    if input_path.is_absolute():
-        raise ValueError("input paths must be relative to the source root")
-    return input_path
+    try:
+        path_parts = validate_artifact_relative_path(requested_file)
+    except ValueError as exc:
+        raise ValueError(
+            "input path is not portable or normalized: {} ({})".format(
+                requested_file, exc
+            )
+        ) from exc
+    return Path(*path_parts)
 
 
 def inspect_source_files(
@@ -69,6 +72,7 @@ def inspect_source_files(
         raise ValueError("source root must be a directory")
 
     source_files: List[SourceFile] = []
+    destination_paths = []
     seen_paths = set()
     for requested_file in requested_files:
         input_path = validate_input_path(requested_file)
@@ -84,6 +88,13 @@ def inspect_source_files(
             relative_path = resolved_path.relative_to(resolved_root).as_posix()
         except ValueError as exc:
             raise ValueError("input path escapes the source root: " + requested_file) from exc
+
+        try:
+            relative_parts = validate_artifact_relative_path(relative_path)
+        except ValueError as exc:
+            raise ValueError(
+                "resolved input path is not portable: {} ({})".format(relative_path, exc)
+            ) from exc
 
         try:
             file_stat = resolved_path.stat()
@@ -109,6 +120,14 @@ def inspect_source_files(
                 byte_size=file_stat.st_size,
                 content_type=content_type,
             )
+        )
+        destination_paths.append((relative_path, relative_parts))
+
+    path_conflicts = find_artifact_path_conflicts(destination_paths)
+    if path_conflicts:
+        conflict_index, message = path_conflicts[0]
+        raise ValueError(
+            "{}: {}".format(destination_paths[conflict_index][0], message)
         )
 
     return source_files
