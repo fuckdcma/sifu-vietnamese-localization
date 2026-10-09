@@ -1,0 +1,4 @@
+transfer_id=PRISM-BRIDGE-001
+project=sifu-vietnamese-localization
+payload_class=PUBLIC_SAFE_TEST_ONLY
+message=prism-to-github-artifact-transfer-test
